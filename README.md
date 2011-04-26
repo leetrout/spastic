@@ -6,7 +6,7 @@ they are received.
 
 # Usage
 
-Spastic is designed to be very minimal with its core methodes relegated to
+Spastic is designed to be very minimal with its core methods relegated to
 handling HTTP authentication and dispatching events when data arrives.
 
 ## Track keywords or users
