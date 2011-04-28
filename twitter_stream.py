@@ -55,9 +55,13 @@ if __name__ == '__main__':
 
 """
 import logging
+import socket
 import threading
 import time
 import urllib2
+
+# set buffer to 0 so we get small bits of data
+socket._fileobject.default_bufsize = 0
 
 logger = logging.getLogger('twitter_stream.TwitterStreamClient')
 
