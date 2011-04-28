@@ -25,8 +25,12 @@ THE SOFTWARE.
 Example:
 
 import json
+import socket
 import time
 from twitter_stream import TwitterStreamClient
+
+# set buffer to 0 so we get small bits of data
+socket._fileobject.default_bufsize = 0
 
 tsc = TwitterStreamClient('user', 'pass',
     'http://stream.twitter.com/1/statuses/filter.json',
