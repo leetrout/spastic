@@ -52,6 +52,7 @@ if __name__ == '__main__':
 """
 import logging
 import socket
+import sys
 import threading
 import time
 import urllib2
@@ -65,10 +66,13 @@ class TwitterStreamClient(object):
     """
     Simple client for Twitter's streaming API.
     """
+    can_listen = True
     conn = None
     connected = False
     handlers = []
-    can_listen = True
+    reconnect_count = 0
+    reconnect_delay = 5
+    reconnect_max = 5
     
     def __init__(self, username, password, api_url, **conn_args):
         """
@@ -135,6 +139,23 @@ class TwitterStreamClient(object):
         """
         self.can_listen = True
         threading.Thread(target=self._listen).start()
+    
+    def reconnect(self):
+        """
+        Handles reconnecting
+        """
+        if self.reconnect_count < self.reconnect_max:
+            self.reconnect_count += 1
+            # wait a little longer between each call in case this is called back
+            # to back
+            delay = self.reconnect_delay * self.reconnect_count
+            self.close()
+            logger.info("reconnecting in %s seconds" % delay)
+            time.sleep()
+            self.listen()
+            return True
+        logger.fatal("maximum reconnects reached")
+        sys.exit(1)
     
     def register_handler(self, handler, idx=None):
         """
