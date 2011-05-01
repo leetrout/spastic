@@ -46,7 +46,7 @@ if __name__ == '__main__':
     # listen for tweets for 30 seconds
     tsc.listen()
     time.sleep(30)
-    tsc.close()
+    tsc.disconnect()
 
 
 """
@@ -68,7 +68,9 @@ class TwitterStreamClient(object):
     """
     can_listen = True
     conn = None
+    conn_args = {}
     connected = False
+    error = None
     handlers = []
     reconnect_count = 0
     reconnect_delay = 5
@@ -96,7 +98,7 @@ class TwitterStreamClient(object):
         for h in self.handlers:
             h(content)
         if not self.handlers:
-            logger.fatal("No handlers specified")
+            logger.warn("No handlers specified")
             raise Exception("No handlers specified")
     
     def _listen(self, connect=True):
@@ -107,31 +109,36 @@ class TwitterStreamClient(object):
         if connect and not self.connected:
             logger.debug('not connected... connecting')
             self.connect()
-        while self.can_listen:
+        listen = self.can_listen
+        while listen:
             try:
                 self._handle(self.conn.readline())
                 time.sleep(0.1)
-            except(AttributeError, TypeError):
-                logger.fatal("A problem listening has occured")
-                raise Exception("A problem listening has occured")
-    
-    def close(self):
-        """
-        Closes the connection if it exists
-        """
-        logger.debug("Closing connection")
-        if self.connected and self.conn:
-            self.can_listen = False
-            self.conn.close()
-        self.connected = False
+                listen = self.can_listen
+            except:
+                logger.warn("an exception listening has occured (%s)" % str(sys.exc_info()[1]))
+                listen = False
+                self.reconnect()
     
     def connect(self):
         """
-        Connects to the API URL
+        Connects to self.api_url.
         """
         logger.debug("connecting %s %s" % (self.api_url, str(self.conn_args)))
-        self.conn = self.opener.open(self.api_url, **self.conn_args)
-        self.connected = True
+        try:
+            self.conn = self.opener.open(self.api_url, **self.conn_args)
+            self.connected = True
+        except:
+            self.error = sys.exc_info()[1]
+            logger.critical(self.error)
+    
+    def disconnect(self):
+        """
+        Closes the active connection.
+        """
+        if self.connected and self.conn:
+            self.can_listen = False
+        self.connected = False
     
     def listen(self):
         """
@@ -140,26 +147,25 @@ class TwitterStreamClient(object):
         self.can_listen = True
         threading.Thread(target=self._listen).start()
     
-    def reconnect(self):
+    def reconnect(self, failure=None):
         """
-        Handles reconnecting
+        Handles reconnecting and delaying to avoid hammering the host.
         """
-        if self.reconnect_count < self.reconnect_max:
-            self.reconnect_count += 1
-            # wait a little longer between each call in case this is called back
-            # to back
-            delay = self.reconnect_delay * self.reconnect_count
-            self.close()
-            logger.info("reconnecting in %s seconds" % delay)
-            time.sleep()
-            self.listen()
-            return True
-        logger.fatal("maximum reconnects reached")
-        sys.exit(1)
+        self.disconnect()
+        if not self.error:
+            if self.reconnect_count < self.reconnect_max:
+                self.reconnect_count += 1
+                delay = self.reconnect_delay * self.reconnect_count
+                logger.info("reconnecting in %d seconds" % delay)
+                time.sleep(delay)
+                self.listen()
+                return True
+            self.error = 'Maximum reconnect attempts reached'
+        logger.fatal(self.error)
     
     def register_handler(self, handler, idx=None):
         """
-        Helper function to add a handler
+        Helper method to add a handler
         """
         if not idx:
             idx = len(self.handlers)
@@ -172,10 +178,8 @@ class TwitterStreamClient(object):
     
     def unregister_handler(self, handler):
         """
-        Helper function to remove a handler.
+        Helper method to remove a handler.
         """
         logger.debug("Removing handler (%s)" % str(handler))
         self.handlers.remove(handler)
-
-    
-
+        
