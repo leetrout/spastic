@@ -112,7 +112,8 @@ class TwitterStreamClient(object):
         listen = self.can_listen
         while listen:
             try:
-                self._handle(self.conn.readline())
+                if self.conn:
+                    self._handle(self.conn.readline())
                 time.sleep(0.1)
                 listen = self.can_listen
             except:
