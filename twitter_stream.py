@@ -56,6 +56,7 @@ import sys
 import threading
 import time
 import urllib2
+import warnings
 
 # set buffer to 0 so we get small bits of data
 socket._fileobject.default_bufsize = 0
@@ -95,11 +96,12 @@ class TwitterStreamClient(object):
         """
         Handle an incoming stream event by passing the data to the handler.
         """
-        for h in self.handlers:
-            h(content)
+        for func, args, kwargs in self.handlers:
+            func(content, *args, **kwargs)
         if not self.handlers:
-            logger.warn("No handlers specified")
-            raise Exception("No handlers specified")
+            self.error = "No handlers specified"
+            logger.error(self.error)
+            raise Exception(self.error)
     
     def _listen(self, connect=True):
         """
@@ -137,8 +139,10 @@ class TwitterStreamClient(object):
         """
         Closes the active connection.
         """
+        logger.debug("disconnecting")
         if self.connected and self.conn:
             self.can_listen = False
+            self.conn.close()
         self.connected = False
     
     def listen(self):
@@ -164,23 +168,47 @@ class TwitterStreamClient(object):
             self.error = 'Maximum reconnect attempts reached'
         logger.fatal(self.error)
     
-    def register_handler(self, handler, idx=None):
+    def register_handler(self, handler, idx=None, args=(), kwargs={}):
         """
-        Helper method to add a handler
+        Inserts a handler function and any optional arguments or keyword
+        arguments in self.handlers as a tuple like (func, (), {})
+        
+        Also accepts an index argument `idx` to control the order in which the
+        handlers are called.
+        
+        Warns if the same function is added more than once.
         """
         if not idx:
             idx = len(self.handlers)
         if callable(handler):
             logger.debug("Adding handler (%s) in position %d" % (str(handler), idx))
-            self.handlers.insert(idx, handler)
+            if handler in [x[0] for x in self.handlers]:
+                w = "Multiple instances of %s registered" % str(handler)
+                logger.warn(w)
+                warnings.warn(w)
+            self.handlers.insert(idx, (handler, args, kwargs))
         else:
-            logger.error("Handler \"%s\" is not callable" % str(handler))
-            raise Exception("Handler \"%s\" is not callable" % str(handler))
+            self.error = "Handler \"%s\" is not callable" % str(handler)
+            logger.error(self.error)
+            raise Exception(self.error)
     
-    def unregister_handler(self, handler):
+    def unregister_handler(self, handler, args=(), kwargs={}):
         """
-        Helper method to remove a handler.
+        Removes a handler function from self.handlers.
+        
+        This should be called with args and kwargs if the handler was registered
+        with them.
+        
+        Warns if there are multiple instances of a function registered and it
+        has to ambiguously remove the first instance.
         """
         logger.debug("Removing handler (%s)" % str(handler))
-        self.handlers.remove(handler)
-        
+        if not args and not kwargs:
+            if len([x[0] for x in self.handlers if x[0] == handler]) > 1:
+                w = "Ambiguous removal of %s" % str(handler)
+                logger.warn(w)
+                warnings.warn(w)
+            self.handlers.remove((h for h in self.handlers if h[0] == handler).next())
+        else:
+            self.handlers.remove((handler, args, kwargs))
+
