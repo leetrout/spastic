@@ -39,7 +39,7 @@ For more information see http://dev.twitter.com/doc/post/statuses/filter
         tsc.listen()
         # we have to block since the listener is threaded
         time.sleep(30)
-        tsc.close()
+        tsc.disconnect()
 
 ## Ingest a random sample
 
@@ -68,7 +68,7 @@ For more information see http://dev.twitter.com/doc/post/statuses/sample
         tsc.listen()
         # we have to block since the listener is threaded
         time.sleep(30)
-        tsc.close()
+        tsc.disconnect()
 
 # License
 
