@@ -178,7 +178,7 @@ class TwitterStreamClient(object):
         
         Warns if the same function is added more than once.
         """
-        if idx is not None:
+        if idx is None:
             idx = len(self.handlers)
         if callable(handler):
             logger.debug("Adding handler (%s) in position %d" % (str(handler), idx))
